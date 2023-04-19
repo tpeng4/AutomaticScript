@@ -3,11 +3,11 @@ import os
 import matplotlib.pyplot as plt 
 import sys
 import docx 
-from docx.shared import Cm
+from docx.shared import Cm, RGBColor,Pt,Inches
 
 root_path = '.\\'
 PresentMonDataDir='PresentMon'
-XAxisNum = 10000
+XAxisNum = 100
 TestPlatformParameters = ['OS','CPU Type','CPU NumberOfCores','CPU NumberOfLogicalProcessors','Baseboard','SMBIOSBIOSVersion','RAM Capacity','RAM ConfiguredClockSpeed','RAM Manufacturer','GPU','DriverVersion','Config']
 TestCaseParameters = ['Average GPU duration','Average Frametime','Aveage FPS','Ratio over 30 FPS','Dropped %']
 
@@ -30,8 +30,8 @@ class ReportContent:
         self.test_information = 'Test Information'
         self.test_date = ''
         self.test_platform_list=[]
-        self.test_setting_path=''
-        self.test_scene_path = ''
+        self.test_setting_path_list=[]
+        self.test_scene_path_list = []
         self.test_case_list=[]
         self.data_compare_tuple_list=[]
         self.emon_data='Emon Data'
@@ -168,18 +168,32 @@ def readfiles():
                 # check if current path is a file
                 if os.path.isfile(os.path.join(dir_path, path)):
                     testfiles.append(os.path.join(dir_path, path))     
-        parsefiles(testfiles,testcasetitle)
+        parsepresentdatafiles(testfiles,testcasetitle)
         testfiles = []
         #parse system configuration informaion
         config_file_path = os.path.join(root_path,dir,'SystemReport-01.txt')
         if(os.path.exists(config_file_path)):
             parseconfigfile(config_file_path)
+        
+        if len(total_doc_content.test_setting_path_list)<=0 :
+            dir_path = os.path.join(root_path,dir ) 
+            img_path_list = sorted([os.path.join(dir_path,name) for name in os.listdir(dir_path) if name.endswith('.png')or name.endswith('.jpg')]) 
+            for img in img_path_list :
+            # get test setting screenshot picture file
+                if 'setting' in img :
+                    total_doc_content.test_setting_path_list.append(img)
+            # get test scene screenshot picture file
+                if 'screenshot' in img:
+                    total_doc_content.test_scene_path_list.append(img)
     #return testfiles
 
 
-def parsefiles(files,title):
+def parsepresentdatafiles(files,title):
     file_list_len=len(files)
-    game_title = ''
+    
+    testcase = TestCase(title)
+    testcase.round_number=file_list_len
+    #testcase.round_data_tuple_list
     if(file_list_len==0):
         return
     else:        
@@ -188,6 +202,18 @@ def parsefiles(files,title):
          
             df=pd.read_csv(file)
             stride = int( len(df.GPUDuration)/XAxisNum)
+
+            round_data_tuple  = []
+            round_data_tuple.append("%.2f" %(df.GPUDuration.mean()))
+            round_data_tuple.append("%.2f" %(df.MsBetweenPresents.mean()))
+            round_data_tuple.append("%.2f" %(1000/float(df.MsBetweenPresents.mean())))
+            #compute ratio of fps > 30fps
+            count = len([x for x in df.MsBetweenPresents.tolist() if x <= 1000/30])
+            round_data_tuple.append("%.1f%%" % (count/len(df.MsBetweenPresents) * 100))            
+            round_data_tuple.append("%.2f" %(df.Dropped.sum()))
+            testcase.round_data_tuple_list.append(round_data_tuple)
+
+            # draw all round diagram for one test case 
             x = []
             GPUDuartion = []
             GPUDuartionAverage = []
@@ -212,47 +238,39 @@ def parsefiles(files,title):
             ax.legend( loc='lower right',fontsize="x-small") 
         plt.suptitle(title)
         #plt.show()
-        plt.savefig(fname=title+'.png' )
+        fname=title+'.png'
+        plt.savefig(fname)
         plt.close()
+        testcase.rounds_diagram_path=fname
+    total_doc_content.test_case_list.append(testcase)
 
-
+# doc heading 3 style. 
+def addheading3(doc, text) :
+    table = doc.add_table(rows=1,cols=1)
+    table.width = Inches(6)
+    table_height = Cm(1.2)
+    table.rows[0].cells[0].text = text
+    
 # generate word file
 def savewordfile():
     doc = docx.Document()
 
-# init fake data 
-    #total_doc_content.title = 'Boundary'
-    #total_doc_content.test_date= '2023.4.12'
-   # total_doc_content.test_platform_list= [
-   #     ('Microsoft Windows 11 Pro 22000.795', '12th Gen Intel(R) Core(TM) i9-12900K','16','24','ROG MAXIMUS Z690 HERO','1304','17179869184','4000','hynix','NVIDIA GeForce RTX 3090','31.0.15.1659','XeSS'),
-   #     ('Microsoft Windows 11 Pro 22000.795', '12th Gen Intel(R) Core(TM) i9-12900K','8','16','ROG MAXIMUS Z690 HERO','1304','17179869184','4000','hynix','NVIDIA GeForce RTX 3090','31.0.15.1659','XeSS'),
-   #     ('Microsoft Windows 11 Pro 22000.795', 'AMD Ryzen 9 5950X 16-Core Processor','16','24','ROG CROSSHAIR VIII HERO (WI-FI)','4201','8589934592','3200','G Skill Intl','NVIDIA GeForce RTX 3090','31.0.15.1659','XeSS')
-   # ]
-    total_doc_content.test_setting_path = 'Settings1.png'
-    total_doc_content.test_scene_path = 'Boundary (64-bit Development PCD3D_SM5)  7_26_2022 2_31_36 PM.png'
-    
-    case1 = TestCase('Case 1')
-    case1.round_number = 3 
-    case1.rounds_diagram_path = 'Boundary ADL-S-i9-12900K-RL4H Ultra ADL-S-i9-12900K-RL4H 1080p DX12 8+0.png'
-    case1.round_data_tuple_list = [
-        ('20','30','33','80%','10%'),
-        ('20','30','33','80%','10%'),
-        ('20','30','33','80%','10%')
-    ]
- 
+#set heading 1 style
+    heading_1_style =  doc.styles['Heading 1']
+    heading_1_style.font.color.rgb = RGBColor(0, 0, 0)
+    heading_1_style.font.size = Pt(24)
+    heading_1_style.paragraph_format.alignment = 1
+    doc.add_heading(total_doc_content.title.upper(),level =1)
 
-    case2 = case1
-    case3 = case1
 
-    total_doc_content.test_case_list.append(case1)
-    total_doc_content.test_case_list.append(case2)
-    total_doc_content.test_case_list.append(case3)
-
-    doc.add_heading(total_doc_content.title)
     doc.add_heading(total_doc_content.test_information,level = 2)
-    doc.add_heading('Test Data', level=3)
+
+
+    doc.add_heading('Test Date', level=3)
     doc.add_paragraph('This case was test on '+total_doc_content.test_date)
-    doc.add_heading('Test Platform', level=3)
+    
+
+    doc.add_heading('SYSTEM CONFIGURATIONS', level=3)
 #add platform table.
     platform_table=doc.add_table(rows=len(TestPlatformParameters)+1, cols= len(total_doc_content.test_platform_list)+1,style="Table Grid")
 
@@ -267,12 +285,14 @@ def savewordfile():
             platform_table.columns[index+1].cells[i+1].text = val
 
 # set test setting screenshot
-    doc.add_heading('Test Setting', level=3)
-    doc.add_picture(total_doc_content.test_setting_path, width=Cm(10))
+    doc.add_heading('GAME SETTING', level=3)
+    for test_setting_path in total_doc_content.test_setting_path_list:
+        doc.add_picture(test_setting_path, width=Cm(10))
 
 # set test scene screenshot
-    doc.add_heading('Test Scene Screenshot', level=3)
-    doc.add_picture(total_doc_content.test_scene_path, width=Cm(10))
+    doc.add_heading('GAME SCENE SCREENSHOT', level=3)
+    for test_scene_path in total_doc_content.test_scene_path_list:
+        doc.add_picture(test_scene_path, width=Cm(10))
 
 # visualize presentmon data
     doc.add_heading('Presentmon data',level = 2)
@@ -289,9 +309,15 @@ def savewordfile():
             testcase_table.rows[k+1].cells[0].text = 'Round%d'%(k+1)
             for m,value in enumerate(data):
                 testcase_table.rows[k+1].cells[m+1].text =value
+        
+        doc.add_heading('Diagram all rounds',level=4)
+        doc.add_picture(testcase.rounds_diagram_path,width=Cm(10))
 
 
-    doc.save('test.docx')
+    filename = 'test.docx'
+    if(os.path.exists(filename)) :
+        os.remove(filename)
+    doc.save(filename)
 
     total_doc_content.emon_data = 'eeee'
 
