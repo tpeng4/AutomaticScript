@@ -3,14 +3,22 @@ import os
 import matplotlib.pyplot as plt 
 import sys
 import docx 
-from docx.shared import Cm, RGBColor,Pt,Inches
+from docx.shared import Cm, RGBColor,Pt
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
+from datetime import datetime
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from tkinter import *  
+from tkinter import filedialog
+from tkinter import messagebox
 
-root_path = '.\\'
 PresentMonDataDir='PresentMon'
 XAxisNum = 100
-TestPlatformParameters = ['OS','CPU Type','CPU NumberOfCores','CPU NumberOfLogicalProcessors','Baseboard','SMBIOSBIOSVersion','RAM Capacity','RAM ConfiguredClockSpeed','RAM Manufacturer','GPU','DriverVersion','Config']
+TestPlatformParameters = ['OS','CPU Type','CPU NumberOfCores','CPU NumberOfLogicalProcessors','Baseboard','SMBIOSBIOSVersion','RAM Capacity','RAM ConfiguredClockSpeed','RAM Manufacturer','GPU','DriverVersion']
 TestCaseParameters = ['Average GPU duration','Average Frametime','Aveage FPS','Ratio over 30 FPS','Dropped %']
-
+test_case_list = []
+test_folder_list = []
+root_path=''
 ## 
 # this class is to store the data of each test case        
 class TestCase :
@@ -36,8 +44,20 @@ class ReportContent:
         self.data_compare_tuple_list=[]
         self.emon_data='Emon Data'
         self.Xperf_data='Xperf Data'
+    def clear(self):
+        self.title = ' '
+        self.test_information = 'Test Information'
+        self.test_date = ''
+        self.test_platform_list=[]
+        self.test_setting_path_list=[]
+        self.test_scene_path_list = []
+        self.test_case_list=[]
+        self.data_compare_tuple_list=[]
+        self.emon_data='Emon Data'
+        self.Xperf_data='Xperf Data'
+ 
 
-def parseconfigfile(file_path) :
+def parse_config_file(file_path) :
     flag = ''
     f= open(file_path,'r',encoding='utf-8' )  
     keyword_list = ['[OS]','[CPU]','[Baseboard]','[BIOS]','[RAM]','[GPU]']
@@ -135,18 +155,34 @@ def parseconfigfile(file_path) :
             
     # save to doc data structure.
     total_doc_content.test_platform_list.append(platform_info_list)
+def get_platforms_list():
+    lnk_files_list = sorted([ name for name in os.listdir(root_path) if name.endswith('.lnk')])  
+    
+    global test_case_list 
+    global test_folder_list
 
-def readfiles():
-    files = []
+    
+    test_case_list = []
+    test_folder_list = []
+    
+    #filter invaild test case 
+    for case in lnk_files_list :
+        case=case.strip('.lnk')  
+        templist = case.split('---')
+        temp_folder = templist[0]
+        if os.path.exists(os.path.join(root_path,temp_folder,PresentMonDataDir)):
+            testcasetitle = templist[3]+' '+templist[5]+' '+templist[8]+' '+templist[6]+' '+templist[7]+' '+templist[9]+' '+templist[-1]
+            test_case_list.append(testcasetitle)
+            test_folder_list.append(temp_folder)
+
+def extract_case_information(selection):
+    files = sorted([ name for name in os.listdir(root_path) if name.endswith('.lnk')])
     dir_list =[]
     testfiles =[]
     testcasetitle= ''
-    for path in os.listdir(root_path):
-    # check if current path is a file
-        if os.path.isfile(os.path.join(root_path, path)):
-            files.append(path) 
-        else :
-            dir_list.append(path)
+    
+    dir_list=[test_folder_list[i] for i in selection] 
+     
     for dir in dir_list :
         
         dir_path = os.path.join(root_path,dir,PresentMonDataDir) 
@@ -167,32 +203,34 @@ def readfiles():
             for path in os.listdir(dir_path):
                 # check if current path is a file
                 if os.path.isfile(os.path.join(dir_path, path)):
-                    testfiles.append(os.path.join(dir_path, path))     
-        parsepresentdatafiles(testfiles,testcasetitle)
+                    testfiles.append(os.path.join(dir_path, path))   
+         
+        parse_presentdata_files(testfiles,testcasetitle)
         testfiles = []
         #parse system configuration informaion
         config_file_path = os.path.join(root_path,dir,'SystemReport-01.txt')
         if(os.path.exists(config_file_path)):
-            parseconfigfile(config_file_path)
+            parse_config_file(config_file_path)
         
         if len(total_doc_content.test_setting_path_list)<=0 :
             dir_path = os.path.join(root_path,dir ) 
             img_path_list = sorted([os.path.join(dir_path,name) for name in os.listdir(dir_path) if name.endswith('.png')or name.endswith('.jpg')]) 
             for img in img_path_list :
             # get test setting screenshot picture file
-                if 'setting' in img :
+                if 'setting' in img.lower() :
                     total_doc_content.test_setting_path_list.append(img)
             # get test scene screenshot picture file
-                if 'screenshot' in img:
+                if 'screenshot' in img.lower():
                     total_doc_content.test_scene_path_list.append(img)
     #return testfiles
 
 
-def parsepresentdatafiles(files,title):
+def parse_presentdata_files(files,title):
     file_list_len=len(files)
     
     testcase = TestCase(title)
     testcase.round_number=file_list_len
+ 
     #testcase.round_data_tuple_list
     if(file_list_len==0):
         return
@@ -245,23 +283,39 @@ def parsepresentdatafiles(files,title):
     total_doc_content.test_case_list.append(testcase)
 
 # doc heading 3 style. 
-def addheading3(doc, text) :
-    table = doc.add_table(rows=1,cols=1)
-    table.width = Inches(6)
-    table_height = Cm(1.2)
-    table.rows[0].cells[0].text = text
-    
+def add_heading3(doc, text) :
+    table = doc.add_table(rows=1,cols=1,style='Light List Accent 5')
+    cell = table.cell(0,0)    
+    #shading_elm_1 = parse_xml(r'<w:shd {} w:fill="98F5FF"/>'.format(nsdecls('w')))
+    #cell._tc.get_or_add_tcPr().append(shading_elm_1)
+    cell.text=text
+    cell.paragraphs[0].runs[0].font.size = Pt(16)   
+    #cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)  
+    doc.add_paragraph(" ")
+
 # generate word file
-def savewordfile():
+def save_word_file():
     doc = docx.Document()
 
 #set heading 1 style
     heading_1_style =  doc.styles['Heading 1']
     heading_1_style.font.color.rgb = RGBColor(0, 0, 0)
     heading_1_style.font.size = Pt(24)
+    heading_1_style.font.name = 'Calibri Light'
     heading_1_style.paragraph_format.alignment = 1
-    doc.add_heading(total_doc_content.title.upper(),level =1)
-
+    doc.add_heading((total_doc_content.title+' Performance testing Report').upper(),level =1)
+    
+    doc.add_paragraph( datetime.now().strftime('%Y-%m-%d')).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    #doc.add_paragraph( "DO NOT COPY OR DISTRIBUTE ")
+    #doc.add_paragraph( 'Intel and Tencent Confidential ')
+    paragraph = doc.add_paragraph()
+    sentence = paragraph.add_run('DO NOT COPY OR DISTRIBUTE \n Intel Confidential')
+    sentence.italic = True
+    sentence.font.color.rgb = RGBColor(255, 0, 0)
+    sentence.font.name = 'Calibri Light'
+    sentence.font.size= Pt(14)
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_page_break()
 
     doc.add_heading(total_doc_content.test_information,level = 2)
 
@@ -270,10 +324,11 @@ def savewordfile():
     doc.add_paragraph('This case was test on '+total_doc_content.test_date)
     
 
-    doc.add_heading('SYSTEM CONFIGURATIONS', level=3)
+    #doc.add_heading('SYSTEM CONFIGURATIONS', level=3)
+    add_heading3(doc,'SYSTEM CONFIGURATIONS' )
 #add platform table.
-    platform_table=doc.add_table(rows=len(TestPlatformParameters)+1, cols= len(total_doc_content.test_platform_list)+1,style="Table Grid")
-
+    platform_table=doc.add_table(rows=len(TestPlatformParameters)+1, cols= len(total_doc_content.test_platform_list)+1)#,style="Table Grid")
+    platform_table.style = 'Medium Grid 3 Accent 1'
 #set first column content    
     for index, para in enumerate(TestPlatformParameters ):
         platform_table.columns[0].cells[index+1].text = para
@@ -282,25 +337,53 @@ def savewordfile():
     for index, platform in  enumerate(total_doc_content.test_platform_list) :
         platform_table.rows[0].cells[index+1].text = 'Platform'+str(index+1)
         for i,val in enumerate(platform):
-            platform_table.columns[index+1].cells[i+1].text = val
+            cell=platform_table.columns[index+1].cells[i+1]
+            cell.text = val
+            cell.paragraphs[0].runs[0].font.size = Pt(9)   
+
 
 # set test setting screenshot
-    doc.add_heading('GAME SETTING', level=3)
+    #doc.add_heading('GAME SETTING', level=3)
+    doc.add_paragraph(" ")
+    add_heading3(doc, 'GAME SETTING')
+# set config parameter table(2*4) 
+    config_table = doc.add_table(rows=4, cols=2,style = "Light Grid Accent 6")
+    config_table.columns[0].cells[0].text = "QUALITY LEVLE"
+    config_table.columns[0].cells[1].text = "API VERSION"
+    config_table.columns[0].cells[2].text = "RESOLUTION"
+    config_table.columns[0].cells[3].text = "GOAL"
+    for i in range(0,4):
+        config_table.columns[0].cells[i].paragraphs[0].alignment = 2 
+    if len(total_doc_content.test_case_list) >0 :        
+        
+        temp_config_list = total_doc_content.test_case_list[0].name.split(' ')
+        config_table.columns[1].cells[0].text =  temp_config_list[4]
+        config_table.columns[1].cells[1].text =  temp_config_list[5]
+        config_table.columns[1].cells[2].text =  temp_config_list[3]
+        config_table.columns[1].cells[3].text =  temp_config_list[1]
+
     for test_setting_path in total_doc_content.test_setting_path_list:
-        doc.add_picture(test_setting_path, width=Cm(10))
+        doc.add_picture(test_setting_path, width=Cm(15))
+
 
 # set test scene screenshot
     doc.add_heading('GAME SCENE SCREENSHOT', level=3)
     for test_scene_path in total_doc_content.test_scene_path_list:
-        doc.add_picture(test_scene_path, width=Cm(10))
+        doc.add_picture(test_scene_path, width=Cm(15))
+# set test summary    
+    add_heading3(doc, 'TESTING RESULTS')
+    doc.add_paragraph('SUMMARY')
+
+
 
 # visualize presentmon data
-    doc.add_heading('Presentmon data',level = 2)
+    doc.add_heading('Detail performance data based on PresentMon',level = 2)
     for i,testcase in enumerate(total_doc_content.test_case_list) :        
         doc.add_heading(testcase.name,level=3)
         doc.add_heading('Data statistic',level=4)
         doc.add_paragraph('In this case, we have run %d times and conclude this data as below.'%testcase.round_number)
-        testcase_table=doc.add_table(rows=testcase.round_number+1,cols=len(TestCaseParameters)+1,style="Table Grid")
+        testcase_table=doc.add_table(rows=testcase.round_number+1,cols=len(TestCaseParameters)+1)
+        testcase_table.style = 'Medium Grid 3 Accent 1'
         # fill out first row
         for j,para in enumerate( TestCaseParameters):
             testcase_table.rows[0].cells[j+1].text = para
@@ -308,33 +391,97 @@ def savewordfile():
         for k, data in enumerate(testcase.round_data_tuple_list) :            
             testcase_table.rows[k+1].cells[0].text = 'Round%d'%(k+1)
             for m,value in enumerate(data):
-                testcase_table.rows[k+1].cells[m+1].text =value
+                cell=testcase_table.rows[k+1].cells[m+1]
+                cell.text =value
+                cell.paragraphs[0].runs[0].font.size = Pt(9)  
         
         doc.add_heading('Diagram all rounds',level=4)
-        doc.add_picture(testcase.rounds_diagram_path,width=Cm(10))
+        doc.add_picture(testcase.rounds_diagram_path,width=Cm(15))
 
 
-    filename = 'test.docx'
+    filename = total_doc_content.title+'.docx'
     if(os.path.exists(filename)) :
         os.remove(filename)
     doc.save(filename)
 
-    total_doc_content.emon_data = 'eeee'
+    total_doc_content.emon_data = 'emon_data'
 
-if __name__=="__main__":
+def button_choose_dir_fun():
+    
+    
+    listbox_global.delete(0, END)
+    global root_path
+    root_path=filedialog.askdirectory() 
+    label_global.config(text=root_path)
+    if root_path !='' :
+        get_platforms_list()
 
-    total_doc_content = ReportContent('')  
+        if len(test_case_list)>0 :
+            for item in test_case_list:
+                listbox_global.insert(END, item)
+        else:
+            messagebox.showinfo("Warning", "Please choose right folder")
+def button_generate_report_fun():
+
+    selection = listbox_global.curselection() 
+        
+    extract_case_information(selection)
+
+    save_word_file() 
+    messagebox.showinfo("Notice", "Report was generated")
+    
+    listbox_global.delete(0, END)
+    
+    # empty all content.
+    total_doc_content.clear()
+
+def create_window():
+
+    root = Tk()
+    #root.withdraw()
  
+    root.title("GenerateReport")
+    root.geometry('500x400+700+200')
+    button_choose_dir = Button(root, text="Choose Directory", command=button_choose_dir_fun) 
+    button_choose_dir.grid() 
 
-    if len(sys.argv) >1:
-        if os.path.exists(sys.argv[1]) :
-            root_path = sys.argv[1]
-        else :
-            print('Please input right path')            
-    else :
-        print( 'Usage: AutomaticScriptForGeneratingReport test_data_path')
+    label_dir= Label(root,text='Please choose test data folder')
+    label_dir.grid(column=1, row=0)
+
+    Label(root,text='Test Case List').grid(column=0,row=1)
+    listbox_test_case = Listbox(root, bg="white", fg="black", bd=5, height=10, width=20, font=("Arial", 14), selectmode='multiple')
+    listbox_test_case.grid(column=0, row=2)
+
+    button_process=Button(root,text='Generate Report',command=button_generate_report_fun)
+    button_process.grid(column=0,row=3)
+    button_exit=Button(root,text='Exit',command=root.destroy)
+    
+    button_exit.grid(column=1,row=3)
+
+    global label_global 
+    label_global= label_dir
+
+    global listbox_global
+    listbox_global = listbox_test_case
+
+    root.mainloop() 
+if __name__=="__main__":
+    
+    total_doc_content = ReportContent('')  
+    
+    create_window()
+
+    
+ 
+    #if len(sys.argv) >1:
+    #    if os.path.exists(sys.argv[1]) :
+    #        root_path = sys.argv[1]
+    #    else :
+    #        print('Please input right path')            
+    #else :
+    #    print( 'Usage: AutomaticScriptForGeneratingReport test_data_path')
 
 
-    readfiles()
+    #read_files()
 
-    savewordfile()
+    #save_word_file()
