@@ -155,6 +155,7 @@ def parse_config_file(file_path) :
             
     # save to doc data structure.
     total_doc_content.test_platform_list.append(platform_info_list)
+
 def get_platforms_list():
     lnk_files_list = sorted([ name for name in os.listdir(root_path) if name.endswith('.lnk')])  
     
@@ -164,22 +165,24 @@ def get_platforms_list():
     
     test_case_list = []
     test_folder_list = []
+    temp_folder_list =  sorted([ dir for dir in os.listdir(root_path) if os.path.isdir(os.path.join(root_path,dir))]) 
     
     #filter invaild test case 
-    for case in lnk_files_list :
-        case=case.strip('.lnk')  
-        templist = case.split('---')
-        temp_folder = templist[0]
-        if os.path.exists(os.path.join(root_path,temp_folder,PresentMonDataDir)):
-            testcasetitle = templist[3]+' '+templist[5]+' '+templist[8]+' '+templist[6]+' '+templist[7]+' '+templist[9]+' '+templist[-1]
-            test_case_list.append(testcasetitle)
-            test_folder_list.append(temp_folder)
+    for dir in temp_folder_list :
+        for case in lnk_files_list :
+            case=case.strip('.lnk')  
+            templist = case.split('---') 
+            if os.path.exists(os.path.join(root_path,dir,PresentMonDataDir)) and dir in case:
+                test_case_title = templist[3]+' '+templist[5]+' '+templist[8]+' '+templist[6]+' '+templist[7]+' '+templist[9]+' '+templist[-1]
+                test_case_list.append(test_case_title)
+                test_folder_list.append(dir)
+                break
 
 def extract_case_information(selection):
     files = sorted([ name for name in os.listdir(root_path) if name.endswith('.lnk')])
     dir_list =[]
-    testfiles =[]
-    testcasetitle= ''
+    test_file_list =[]
+    test_case_title= ''
     
     dir_list=[test_folder_list[i] for i in selection] 
      
@@ -191,7 +194,7 @@ def extract_case_information(selection):
                 if dir in file :  
                     file =  file.strip('.lnk')                 
                     templist = file.split('---')
-                    testcasetitle = templist[3]+' '+templist[5]+' '+templist[8]+' '+templist[6]+' '+templist[7]+' '+templist[9]+' '+templist[-1]
+                    test_case_title = templist[3]+' '+templist[5]+' '+templist[8]+' '+templist[6]+' '+templist[7]+' '+templist[9]+' '+templist[-1]
 
                     #get title name
                     total_doc_content.title = templist[3]
@@ -203,10 +206,10 @@ def extract_case_information(selection):
             for path in os.listdir(dir_path):
                 # check if current path is a file
                 if os.path.isfile(os.path.join(dir_path, path)):
-                    testfiles.append(os.path.join(dir_path, path))   
+                    test_file_list.append(os.path.join(dir_path, path))   
          
-        parse_presentdata_files(testfiles,testcasetitle)
-        testfiles = []
+        parse_presentdata_files(test_file_list,test_case_title)
+        test_file_list = []
         #parse system configuration informaion
         config_file_path = os.path.join(root_path,dir,'SystemReport-01.txt')
         if(os.path.exists(config_file_path)):
