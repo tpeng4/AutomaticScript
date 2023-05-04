@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt 
 import sys
+import numpy as np
 import docx 
 from docx.shared import Cm, RGBColor,Pt
 from docx.oxml.ns import nsdecls
@@ -28,6 +29,7 @@ class TestCase :
         self.round_data_tuple_list = []
         self.rounds_diagram_path = ''
         self.median_round_frametime_chart_path=''
+        self.median_round_presentmon_data_path=''
 
 
 ##
@@ -281,8 +283,16 @@ def parse_presentdata_files(files,title):
         #plt.show()
         fname=title+'.png'
         plt.savefig(fname)
+        os.remove(fname)
         plt.close()
         testcase.rounds_diagram_path=fname
+    # get median round presentmon data file path
+    average_fps_list = []
+    for case in testcase.round_data_tuple_list :
+        average_fps_list.append(case[2]) 
+    sorted_average_fps_list = sorted(average_fps_list)
+    testcase.median_round_presentmon_data_path=files[average_fps_list.index(sorted_average_fps_list[int(len(sorted_average_fps_list)/2)])]
+    #
     total_doc_content.test_case_list.append(testcase)
 
 # doc heading 3 style. 
@@ -295,7 +305,37 @@ def add_heading3(doc, text) :
     cell.paragraphs[0].runs[0].font.size = Pt(16)   
     #cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)  
     doc.add_paragraph(" ")
+#
 
+def save_test_summary_bar(doc) :
+    testcase_bar_data_list = []    
+    bar_percenttile=[1,90]
+    bar_x = np.arange(len(total_doc_content.test_case_list))
+    bar_x_labels =[]
+    bar_average_fps=[]
+    for i,testcase in enumerate(total_doc_content.test_case_list) :
+        #doc.add_paragraph(testcase.median_round_presentmon_data_path)
+        df = pd.read_csv(testcase.median_round_presentmon_data_path)
+        frametime_list = df.MsBetweenPresents.to_list()
+        fps_list = [round(1000/float(i),2 )for i in frametime_list]
+        data = np.array(fps_list)
+        result = np.percentile(data,bar_percenttile)
+        bar_average_fps.append(round(data.mean(),2))
+        bar_x_labels.append('Platform%d'%(i+1))#testcase.name)
+        testcase_bar_data_list.append(result)
+    # begin to draw bar chart
+    bar_total_width = 1
+    bar_each_width = bar_total_width/(len(bar_percenttile)+3)
+    plt.figure(dpi=200,figsize=(16,8))
+    plt.bar(bar_x,bar_average_fps,width=bar_each_width,label='Average FPS')
+    for i in range(len(bar_percenttile)) :
+        plt.bar(bar_x+(i+1)*bar_each_width,[p[i] for p in testcase_bar_data_list],width=bar_each_width, label='%d'%bar_percenttile[i]+'% FPS')
+    plt.xticks(bar_x,bar_x_labels,fontsize=14)
+    plt.legend()
+    plt.ylabel("FPS",fontsize=20)
+    plt.savefig('bar_temp.png')
+    doc.add_picture('bar_temp.png' ,width=Cm(15))
+    os.remove('bar_temp.png')
 # generate word file
 def save_word_file():
     doc = docx.Document()
@@ -375,10 +415,24 @@ def save_word_file():
         doc.add_picture(test_scene_path, width=Cm(15))
 # set test summary    
     add_heading3(doc, 'TESTING RESULTS')
-    doc.add_paragraph('SUMMARY')
+    doc.add_paragraph('SUMMARY') 
+    #collect all data needed to plot bar 
+    save_test_summary_bar(doc)
 
-
-
+# frametime chart of all cases
+    plt.figure(dpi=100,figsize=(16,8))
+    for i,testcase in enumerate(total_doc_content.test_case_list) :
+        df = pd.read_csv(testcase.median_round_presentmon_data_path)
+        x = df.TimeInSeconds.to_list()
+        y = df.MsBetweenPresents.to_list()
+        plt.plot(x,y,linewidth=0.2,label = testcase.name )
+    plt.xlabel('TimeInSeconds')
+    plt.ylabel('Milliseconds')
+    plt.legend()
+    plt.savefig('frametime_compare.png')
+    doc.add_picture('frametime_compare.png' ,width=Cm(15))
+    os.remove('frametime_compare.png')
+    plt.close()
 # visualize presentmon data
     doc.add_heading('Detail performance data based on PresentMon',level = 2)
     for i,testcase in enumerate(total_doc_content.test_case_list) :        
@@ -415,7 +469,7 @@ def button_choose_dir_fun():
     listbox_global.delete(0, END)
     global root_path
     root_path=filedialog.askdirectory() 
-    label_global.config(text=root_path)
+    #label_global.config(text=root_path)
     if root_path !='' :
         get_platforms_list()
 
@@ -431,38 +485,43 @@ def button_generate_report_fun():
     extract_case_information(selection)
 
     save_word_file() 
-    messagebox.showinfo("Notice", "Report was generated")
     
     listbox_global.delete(0, END)
     
     # empty all content.
     total_doc_content.clear()
 
+    messagebox.showinfo("Notice", "Report was generated")
 def create_window():
 
     root = Tk()
     #root.withdraw()
- 
-    root.title("GenerateReport")
-    root.geometry('500x400+700+200')
-    button_choose_dir = Button(root, text="Choose Directory", command=button_choose_dir_fun) 
+    root.resizable(1,1)
+    root.title("ReportGenerator")
+    root.geometry('800x350+700+200')
+    frame1 =Frame(root) 
+    button_choose_dir = Button(frame1, text="Choose Directory", command=button_choose_dir_fun) 
     button_choose_dir.grid() 
 
-    label_dir= Label(root,text='Please choose test data folder')
-    label_dir.grid(column=1, row=0)
+    #label_dir= Label(root,text='Please choose test data folder')
+    #label_dir.grid(column=1, row=0)
 
-    Label(root,text='Test Case List').grid(column=0,row=1)
-    listbox_test_case = Listbox(root, bg="white", fg="black", bd=5, height=10, width=20, font=("Arial", 14), selectmode='multiple')
-    listbox_test_case.grid(column=0, row=2)
+    scrollbar_h = Scrollbar(root,orient=HORIZONTAL)
+    #Label(root,text='Test Case List').grid(column=0,row=1)
+    listbox_test_case = Listbox(root, bg="white", fg="black", bd=5, height=10, width=20, font=("Arial", 14), selectmode='multiple',xscrollcommand=scrollbar_h)
+    listbox_test_case.pack(fill=X,padx=5)#grid(column=1, row=2)
+    scrollbar_h.config(command=listbox_test_case.xview)
+    scrollbar_h.pack(fill=X)
 
-    button_process=Button(root,text='Generate Report',command=button_generate_report_fun)
-    button_process.grid(column=0,row=3)
-    button_exit=Button(root,text='Exit',command=root.destroy)
+    button_process=Button(frame1,text='Generate Report',command=button_generate_report_fun)
+    button_process.grid(column=1,row=0,padx=20)
+    #button_exit=Button(frame1,text='Exit',command=root.destroy)
     
-    button_exit.grid(column=1,row=3)
+    #button_exit.grid(column=2,row=0,padx=10)
 
-    global label_global 
-    label_global= label_dir
+    frame1.pack(pady=20) 
+    #global label_global 
+    #label_global= label_dir
 
     global listbox_global
     listbox_global = listbox_test_case
@@ -475,16 +534,3 @@ if __name__=="__main__":
     create_window()
 
     
- 
-    #if len(sys.argv) >1:
-    #    if os.path.exists(sys.argv[1]) :
-    #        root_path = sys.argv[1]
-    #    else :
-    #        print('Please input right path')            
-    #else :
-    #    print( 'Usage: AutomaticScriptForGeneratingReport test_data_path')
-
-
-    #read_files()
-
-    #save_word_file()
