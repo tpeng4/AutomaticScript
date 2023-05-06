@@ -283,7 +283,6 @@ def parse_presentdata_files(files,title):
         #plt.show()
         fname=title+'.png'
         plt.savefig(fname)
-        os.remove(fname)
         plt.close()
         testcase.rounds_diagram_path=fname
     # get median round presentmon data file path
@@ -328,14 +327,186 @@ def save_test_summary_bar(doc) :
     bar_each_width = bar_total_width/(len(bar_percenttile)+3)
     plt.figure(dpi=200,figsize=(16,8))
     plt.bar(bar_x,bar_average_fps,width=bar_each_width,label='Average FPS')
+    for i  in range(len(bar_x)) :
+        plt.text(bar_x[i], bar_average_fps[i]+2,bar_average_fps[i],ha='center',fontsize=14)
     for i in range(len(bar_percenttile)) :
-        plt.bar(bar_x+(i+1)*bar_each_width,[p[i] for p in testcase_bar_data_list],width=bar_each_width, label='%d'%bar_percenttile[i]+'% FPS')
+        percentile_fps_list = [p[i] for p in testcase_bar_data_list]
+        plt.bar(bar_x+(i+1)*bar_each_width,percentile_fps_list,width=bar_each_width, label='%d'%bar_percenttile[i]+'% FPS')
+        for j in range(len(bar_x)):
+            plt.text(bar_x[j]+(i+1)*bar_each_width, percentile_fps_list[j]+2,round(percentile_fps_list[j],2),ha='center',fontsize=14)
     plt.xticks(bar_x,bar_x_labels,fontsize=14)
     plt.legend()
-    plt.ylabel("FPS",fontsize=20)
+    plt.ylabel("FPS",fontsize=20) 
     plt.savefig('bar_temp.png')
     doc.add_picture('bar_temp.png' ,width=Cm(15))
     os.remove('bar_temp.png')
+
+
+#  save each case informaiton to doc 
+def save_each_case_detail_analysis_report(doc) :
+    for i,testcase in enumerate(total_doc_content.test_case_list) :        
+        doc.add_heading(testcase.name,level=3)
+        doc.add_heading('Data statistic',level=4)
+        doc.add_paragraph('In this case, we have run %d times and conclude this data as below.'%testcase.round_number)
+        testcase_table=doc.add_table(rows=testcase.round_number+1,cols=len(TestCaseParameters)+1)
+        testcase_table.style = 'Medium Grid 3 Accent 1'
+        # fill out first row
+        for j,para in enumerate( TestCaseParameters):
+            testcase_table.rows[0].cells[j+1].text = para
+        # fill out the other row
+        for k, data in enumerate(testcase.round_data_tuple_list) :            
+            testcase_table.rows[k+1].cells[0].text = 'Round%d'%(k+1)
+            for m,value in enumerate(data):
+                cell=testcase_table.rows[k+1].cells[m+1]
+                cell.text =value
+                cell.paragraphs[0].runs[0].font.size = Pt(9)  
+        
+        doc.add_heading('Diagram all rounds',level=4)
+        doc.add_picture(testcase.rounds_diagram_path,width=Cm(15))
+        os.remove(testcase.rounds_diagram_path)
+        
+        #add each case median round frametime sensitivity analysis
+        doc.add_heading('Median Round Frametime Sensitivity Analysis',level=4)
+        median_frametime_table = doc.add_table(rows=14, cols=2,style = "Light Grid Accent 6")
+        median_frametime_table.columns[0].cells[0].text = "Total Frames"
+        median_frametime_table.columns[0].cells[1].text = "Total Duration"
+        median_frametime_table.columns[0].cells[2].text = "Avg. GPU Utilization"
+        median_frametime_table.columns[0].cells[3].text = "Avg. Frametime"
+        median_frametime_table.columns[0].cells[4].text = "Avg. FPS"
+        median_frametime_table.columns[0].cells[5].text = "Frames Dropped"
+        median_frametime_table.columns[0].cells[6].text = "Frames GPU Bound Number"
+        median_frametime_table.columns[0].cells[7].text = "Frames GPU Bound Percent"
+        median_frametime_table.columns[0].cells[8].text = "Mean GPU Time"
+        median_frametime_table.columns[0].cells[9].text = "Min GPU Time"        
+        median_frametime_table.columns[0].cells[10].text = "Max GPU Time"        
+        median_frametime_table.columns[0].cells[11].text = "Mean CPU Time"
+        median_frametime_table.columns[0].cells[12].text = "Min CPU Time"        
+        median_frametime_table.columns[0].cells[13].text = "Max CPU Time"
+
+        for i in range(0,14):
+            median_frametime_table.columns[0].cells[i].paragraphs[0].alignment = 2 
+
+        df = pd.read_csv(testcase.median_round_presentmon_data_path)
+        frametime_list= df.MsBetweenPresents.to_list()
+        gpuduration_list = df.GPUDuration.to_list()
+        TimeInSeconds_list = df.TimeInSeconds.to_list()
+        Dropped_list = df.Dropped.to_list() 
+
+        median_frametime_table.columns[1].cells[0].text = str(len(frametime_list))
+        median_frametime_table.columns[1].cells[1].text = str(int(TimeInSeconds_list[-1]))
+        median_frametime_table.columns[1].cells[2].text = str(round(100*np.array(gpuduration_list).mean()/np.array(frametime_list).mean(),2))+'%'
+        median_frametime_table.columns[1].cells[3].text =str(round(np.array(frametime_list).mean(),2))+' ms'
+        median_frametime_table.columns[1].cells[4].text =str(round(1000/np.array(frametime_list).mean(),2))
+        median_frametime_table.columns[1].cells[5].text =str(np.array(Dropped_list).sum())
+
+        bound_num=0
+        bound_list = []
+        bound_percent_list = []
+        for i in range(len(frametime_list)):
+            bound_percent_list.append(min(100, 100*gpuduration_list[i]/frametime_list[i]))         
+            if gpuduration_list[i]/frametime_list[i]>=0.95 :
+                bound_num=bound_num+1
+                bound_list.append(1)
+            else:
+                bound_list.append(0)
+
+        median_frametime_table.columns[1].cells[6].text =str(bound_num)
+        median_frametime_table.columns[1].cells[7].text =str(round(100*bound_num/len(frametime_list),2))+'%'
+        median_frametime_table.columns[1].cells[8].text = str(round(np.array(gpuduration_list).mean(),2))+' ms'
+        median_frametime_table.columns[1].cells[9].text =str(round(np.array(gpuduration_list).min(),2))+' ms'
+        median_frametime_table.columns[1].cells[10].text =str(round(np.array(gpuduration_list).max(),2))+' ms'
+        median_frametime_table.columns[1].cells[11].text =str(round(np.array(frametime_list).mean(),2))+' ms'
+        median_frametime_table.columns[1].cells[12].text =str(round(np.array(frametime_list).min(),2))+' ms'
+        median_frametime_table.columns[1].cells[13].text =str(round(np.array(frametime_list).max(),2))+' ms'
+
+        plt.figure(dpi=100,figsize=(16,8)) 
+        plt.plot(TimeInSeconds_list,frametime_list,linewidth=0.2,label = 'CPU Frametime' )
+        plt.plot(TimeInSeconds_list,gpuduration_list,linewidth=0.2,label = 'GPU Frametime' )
+        plt.xlabel('Time In Seconds')
+        plt.ylabel('Milliseconds')
+        plt.legend()
+        plt.savefig('median_frametime_compare.png')
+        doc.add_picture('median_frametime_compare.png' ,width=Cm(15))
+        os.remove('median_frametime_compare.png')
+        plt.close()
+#gpu bound
+        plt.figure(dpi=100,figsize=(16,8)) 
+        plt.bar(TimeInSeconds_list,bound_list,linewidth=0.2,label = 'GPU Bound' ) 
+        plt.xlabel('Time In Seconds')
+        plt.ylabel('GPU BOUND')
+        plt.legend()
+        plt.savefig('temp_gpu_bound.png')
+        doc.add_picture('temp_gpu_bound.png' ,width=Cm(15))
+        os.remove('temp_gpu_bound.png')
+        plt.close()
+# gpu utilization
+        plt.figure(dpi=100,figsize=(16,8)) 
+        plt.bar(TimeInSeconds_list,bound_percent_list,linewidth=0.2,label = 'GPU Utilization %' ) 
+        plt.xlabel('Time In Seconds')
+        plt.ylabel('GPU UTILIZATION')
+        plt.legend()
+        plt.savefig('temp_gpu_utilizaiton.png')
+        doc.add_picture('temp_gpu_utilizaiton.png' ,width=Cm(15))
+        os.remove('temp_gpu_utilizaiton.png')
+        plt.close()
+
+
+# summary test platforms infromation
+def save_platforms_information(doc):
+
+#add platform table.
+    platform_table=doc.add_table(rows=len(TestPlatformParameters)+1, cols= len(total_doc_content.test_platform_list)+1)#,style="Table Grid")
+    platform_table.style = 'Medium Grid 3 Accent 1'
+#set first column content    
+    for index, para in enumerate(TestPlatformParameters ):
+        platform_table.columns[0].cells[index+1].text = para
+
+# set other column content of platform table. 
+    for index, platform in  enumerate(total_doc_content.test_platform_list) :
+        platform_table.rows[0].cells[index+1].text = 'Platform'+str(index+1)
+        for i,val in enumerate(platform):
+            cell=platform_table.columns[index+1].cells[i+1]
+            cell.text = val
+            cell.paragraphs[0].runs[0].font.size = Pt(9)   
+
+#
+def save_test_config_table(doc):
+# set config parameter table(2*4) 
+    config_table = doc.add_table(rows=4, cols=2,style = "Light Grid Accent 6")
+    config_table.columns[0].cells[0].text = "QUALITY LEVLE"
+    config_table.columns[0].cells[1].text = "API VERSION"
+    config_table.columns[0].cells[2].text = "RESOLUTION"
+    config_table.columns[0].cells[3].text = "GOAL"
+    for i in range(0,4):
+        config_table.columns[0].cells[i].paragraphs[0].alignment = 2 
+    if len(total_doc_content.test_case_list) >0 :        
+        
+        temp_config_list = total_doc_content.test_case_list[0].name.split(' ')
+        config_table.columns[1].cells[0].text =  temp_config_list[4]
+        config_table.columns[1].cells[1].text =  temp_config_list[5]
+        config_table.columns[1].cells[2].text =  temp_config_list[3]
+        config_table.columns[1].cells[3].text =  temp_config_list[1]
+
+    for test_setting_path in total_doc_content.test_setting_path_list:
+        doc.add_picture(test_setting_path, width=Cm(15))
+#
+def save_all_cases_frametime_diagram(doc):
+# frametime chart of all cases
+    plt.figure(dpi=100,figsize=(16,8))
+    for i,testcase in enumerate(total_doc_content.test_case_list) :
+        df = pd.read_csv(testcase.median_round_presentmon_data_path)
+        x = df.TimeInSeconds.to_list()
+        y = df.MsBetweenPresents.to_list()
+        plt.plot(x,y,linewidth=0.2,label = testcase.name )
+    plt.xlabel('Time In Seconds')
+    plt.ylabel('Milliseconds')
+    plt.legend()
+    plt.savefig('frametime_compare.png')
+    doc.add_picture('frametime_compare.png' ,width=Cm(15))
+    os.remove('frametime_compare.png')
+    plt.close()
+
+
 # generate word file
 def save_word_file():
     doc = docx.Document()
@@ -369,45 +540,13 @@ def save_word_file():
 
     #doc.add_heading('SYSTEM CONFIGURATIONS', level=3)
     add_heading3(doc,'SYSTEM CONFIGURATIONS' )
-#add platform table.
-    platform_table=doc.add_table(rows=len(TestPlatformParameters)+1, cols= len(total_doc_content.test_platform_list)+1)#,style="Table Grid")
-    platform_table.style = 'Medium Grid 3 Accent 1'
-#set first column content    
-    for index, para in enumerate(TestPlatformParameters ):
-        platform_table.columns[0].cells[index+1].text = para
-
-# set other column content of platform table. 
-    for index, platform in  enumerate(total_doc_content.test_platform_list) :
-        platform_table.rows[0].cells[index+1].text = 'Platform'+str(index+1)
-        for i,val in enumerate(platform):
-            cell=platform_table.columns[index+1].cells[i+1]
-            cell.text = val
-            cell.paragraphs[0].runs[0].font.size = Pt(9)   
-
+    save_platforms_information(doc)
 
 # set test setting screenshot
     #doc.add_heading('GAME SETTING', level=3)
     doc.add_paragraph(" ")
     add_heading3(doc, 'GAME SETTING')
-# set config parameter table(2*4) 
-    config_table = doc.add_table(rows=4, cols=2,style = "Light Grid Accent 6")
-    config_table.columns[0].cells[0].text = "QUALITY LEVLE"
-    config_table.columns[0].cells[1].text = "API VERSION"
-    config_table.columns[0].cells[2].text = "RESOLUTION"
-    config_table.columns[0].cells[3].text = "GOAL"
-    for i in range(0,4):
-        config_table.columns[0].cells[i].paragraphs[0].alignment = 2 
-    if len(total_doc_content.test_case_list) >0 :        
-        
-        temp_config_list = total_doc_content.test_case_list[0].name.split(' ')
-        config_table.columns[1].cells[0].text =  temp_config_list[4]
-        config_table.columns[1].cells[1].text =  temp_config_list[5]
-        config_table.columns[1].cells[2].text =  temp_config_list[3]
-        config_table.columns[1].cells[3].text =  temp_config_list[1]
-
-    for test_setting_path in total_doc_content.test_setting_path_list:
-        doc.add_picture(test_setting_path, width=Cm(15))
-
+    save_test_config_table(doc)
 
 # set test scene screenshot
     doc.add_heading('GAME SCENE SCREENSHOT', level=3)
@@ -418,50 +557,16 @@ def save_word_file():
     doc.add_paragraph('SUMMARY') 
     #collect all data needed to plot bar 
     save_test_summary_bar(doc)
+    save_all_cases_frametime_diagram(doc)
 
-# frametime chart of all cases
-    plt.figure(dpi=100,figsize=(16,8))
-    for i,testcase in enumerate(total_doc_content.test_case_list) :
-        df = pd.read_csv(testcase.median_round_presentmon_data_path)
-        x = df.TimeInSeconds.to_list()
-        y = df.MsBetweenPresents.to_list()
-        plt.plot(x,y,linewidth=0.2,label = testcase.name )
-    plt.xlabel('TimeInSeconds')
-    plt.ylabel('Milliseconds')
-    plt.legend()
-    plt.savefig('frametime_compare.png')
-    doc.add_picture('frametime_compare.png' ,width=Cm(15))
-    os.remove('frametime_compare.png')
-    plt.close()
 # visualize presentmon data
     doc.add_heading('Detail performance data based on PresentMon',level = 2)
-    for i,testcase in enumerate(total_doc_content.test_case_list) :        
-        doc.add_heading(testcase.name,level=3)
-        doc.add_heading('Data statistic',level=4)
-        doc.add_paragraph('In this case, we have run %d times and conclude this data as below.'%testcase.round_number)
-        testcase_table=doc.add_table(rows=testcase.round_number+1,cols=len(TestCaseParameters)+1)
-        testcase_table.style = 'Medium Grid 3 Accent 1'
-        # fill out first row
-        for j,para in enumerate( TestCaseParameters):
-            testcase_table.rows[0].cells[j+1].text = para
-        # fill out the other row
-        for k, data in enumerate(testcase.round_data_tuple_list) :            
-            testcase_table.rows[k+1].cells[0].text = 'Round%d'%(k+1)
-            for m,value in enumerate(data):
-                cell=testcase_table.rows[k+1].cells[m+1]
-                cell.text =value
-                cell.paragraphs[0].runs[0].font.size = Pt(9)  
-        
-        doc.add_heading('Diagram all rounds',level=4)
-        doc.add_picture(testcase.rounds_diagram_path,width=Cm(15))
-
+    save_each_case_detail_analysis_report(doc)
 
     filename = total_doc_content.title+'.docx'
     if(os.path.exists(filename)) :
         os.remove(filename)
     doc.save(filename)
-
-    total_doc_content.emon_data = 'emon_data'
 
 def button_choose_dir_fun():
     
@@ -515,9 +620,8 @@ def create_window():
 
     button_process=Button(frame1,text='Generate Report',command=button_generate_report_fun)
     button_process.grid(column=1,row=0,padx=20)
-    #button_exit=Button(frame1,text='Exit',command=root.destroy)
-    
-    #button_exit.grid(column=2,row=0,padx=10)
+    button_exit=Button(frame1,text='Exit',command=sys.exit)    
+    button_exit.grid(column=2,row=0,padx=10)
 
     frame1.pack(pady=20) 
     #global label_global 
