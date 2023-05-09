@@ -134,7 +134,7 @@ def parse_config_file(file_path) :
             str3=''
             for val in para_list :
                 if 'Capacity' in val :
-                    str1 = val.split('=')[1]
+                    str1 = str( round(float(val.split('=')[1])/(1024*1024*1024),2)) + 'GB'
                 if 'ConfiguredClockSpeed' in val:
                     str2 = val.split('=')[1]
                 if 'Manufacturer' in val:
@@ -258,20 +258,20 @@ def parse_presentdata_files(files,title):
 
             # draw all round diagram for one test case 
             x = []
-            GPUDuartion = []
-            GPUDuartionAverage = []
+            GPUDuration = []
+            GPUDurationAverage = []
             MsBetweenPresents= []
             MsBetweenPresentsAverage= []
             for i in range(XAxisNum):
                 x.append(i)
-                GPUDuartion.append(df.GPUDuration[i*stride])
-                GPUDuartionAverage.append(round(df.GPUDuration.mean(),2))         
+                GPUDuration.append(df.GPUDuration[i*stride])
+                GPUDurationAverage.append(round(df.GPUDuration.mean(),2))         
 
                 MsBetweenPresents.append(df.MsBetweenPresents[i*stride])
                 MsBetweenPresentsAverage.append(round(df.MsBetweenPresents.mean(),2))   
             ax=plt.subplot(2,int(file_list_len/2)+1,index+1)
-            ax.plot(x,GPUDuartion,label= "GPUDuartion" )
-            ax.plot(x,GPUDuartionAverage,'b' ,label= "GPUDuartionAverage")
+            ax.plot(x,GPUDuration,label= "GPUDuration" )
+            ax.plot(x,GPUDurationAverage,'b' ,label= "GPUDurationAverage")
             ax.plot(x,MsBetweenPresents,'orange' ,label= "MsBetweenPresents")
             ax.plot(x,MsBetweenPresentsAverage,'brown',label= "MsBetweenPresentsAverage" )
             ax.set_ylim(bottom=0.)
@@ -315,14 +315,14 @@ def save_test_summary_bar(doc) :
     for i,testcase in enumerate(total_doc_content.test_case_list) :
         #doc.add_paragraph(testcase.median_round_presentmon_data_path)
         df = pd.read_csv(testcase.median_round_presentmon_data_path)
-        frametime_list = df.MsBetweenPresents.to_list()
-        fps_list = [round(1000/float(i),2 )for i in frametime_list]
+        frametime_list = df.MsBetweenPresents.to_list() 
+        fps_list = [1000/i for i in frametime_list] 
         data = np.array(fps_list)
         result = np.percentile(data,bar_percenttile)
-        bar_average_fps.append(round(data.mean(),2))
+        bar_average_fps.append(round(1000/np.array(frametime_list).mean(),2))
         bar_x_labels.append('Platform%d'%(i+1))#testcase.name)
         testcase_bar_data_list.append(result)
-    # begin to draw bar chart
+    # begin to draw bar chart 
     bar_total_width = 1
     bar_each_width = bar_total_width/(len(bar_percenttile)+3)
     plt.figure(dpi=200,figsize=(16,8))
@@ -393,7 +393,7 @@ def save_each_case_detail_analysis_report(doc) :
         Dropped_list = df.Dropped.to_list() 
 
         median_frametime_table.columns[1].cells[0].text = str(len(frametime_list))
-        median_frametime_table.columns[1].cells[1].text = str(int(TimeInSeconds_list[-1]))
+        median_frametime_table.columns[1].cells[1].text = str(int(TimeInSeconds_list[-1])+1) +' seconds'
         median_frametime_table.columns[1].cells[2].text = str(round(100*np.array(gpuduration_list).mean()/np.array(frametime_list).mean(),2))+'%'
         median_frametime_table.columns[1].cells[3].text =str(round(np.array(frametime_list).mean(),2))+' ms'
         median_frametime_table.columns[1].cells[4].text =str(round(1000/np.array(frametime_list).mean(),2))
@@ -419,9 +419,9 @@ def save_each_case_detail_analysis_report(doc) :
         median_frametime_table.columns[1].cells[12].text =str(round(np.array(frametime_list).min(),2))+' ms'
         median_frametime_table.columns[1].cells[13].text =str(round(np.array(frametime_list).max(),2))+' ms'
 
-        plt.figure(dpi=100,figsize=(16,8)) 
-        plt.plot(TimeInSeconds_list,frametime_list,linewidth=0.2,label = 'CPU Frametime' )
-        plt.plot(TimeInSeconds_list,gpuduration_list,linewidth=0.2,label = 'GPU Frametime' )
+        plt.figure(dpi=100,figsize=(24,8)) 
+        plt.plot(TimeInSeconds_list[0:-1:50],frametime_list[0:-1:50],linewidth=0.5,label = 'CPU Frametime' )
+        plt.plot(TimeInSeconds_list[0:-1:50],gpuduration_list[0:-1:50],linewidth=0.5,label = 'GPU Frametime' )
         plt.xlabel('Time In Seconds')
         plt.ylabel('Milliseconds')
         plt.legend()
@@ -430,21 +430,21 @@ def save_each_case_detail_analysis_report(doc) :
         os.remove('median_frametime_compare.png')
         plt.close()
 #gpu bound
-        plt.figure(dpi=100,figsize=(16,8)) 
-        plt.bar(TimeInSeconds_list,bound_list,linewidth=0.2,label = 'GPU Bound' ) 
+        plt.figure(dpi=100,figsize=(16,2)) 
+        plt.bar(TimeInSeconds_list,bound_list,width=0.1,label = 'GPU Bound' ) 
         plt.xlabel('Time In Seconds')
         plt.ylabel('GPU BOUND')
-        plt.legend()
+        plt.legend(loc=1)
         plt.savefig('temp_gpu_bound.png')
         doc.add_picture('temp_gpu_bound.png' ,width=Cm(15))
         os.remove('temp_gpu_bound.png')
         plt.close()
 # gpu utilization
-        plt.figure(dpi=100,figsize=(16,8)) 
-        plt.bar(TimeInSeconds_list,bound_percent_list,linewidth=0.2,label = 'GPU Utilization %' ) 
+        plt.figure(dpi=100,figsize=(16,2)) 
+        plt.bar(TimeInSeconds_list,bound_percent_list,width=0.1,label = 'GPU Utilization %' ) 
         plt.xlabel('Time In Seconds')
         plt.ylabel('GPU UTILIZATION')
-        plt.legend()
+        plt.legend(loc=1)
         plt.savefig('temp_gpu_utilizaiton.png')
         doc.add_picture('temp_gpu_utilizaiton.png' ,width=Cm(15))
         os.remove('temp_gpu_utilizaiton.png')
@@ -473,7 +473,7 @@ def save_platforms_information(doc):
 def save_test_config_table(doc):
 # set config parameter table(2*4) 
     config_table = doc.add_table(rows=4, cols=2,style = "Light Grid Accent 6")
-    config_table.columns[0].cells[0].text = "QUALITY LEVLE"
+    config_table.columns[0].cells[0].text = "QUALITY LEVEL"
     config_table.columns[0].cells[1].text = "API VERSION"
     config_table.columns[0].cells[2].text = "RESOLUTION"
     config_table.columns[0].cells[3].text = "GOAL"
@@ -623,9 +623,7 @@ def create_window():
     button_exit=Button(frame1,text='Exit',command=sys.exit)    
     button_exit.grid(column=2,row=0,padx=10)
 
-    frame1.pack(pady=20) 
-    #global label_global 
-    #label_global= label_dir
+    frame1.pack(pady=20)  
 
     global listbox_global
     listbox_global = listbox_test_case
