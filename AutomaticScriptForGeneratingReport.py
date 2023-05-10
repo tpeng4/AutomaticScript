@@ -12,6 +12,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from tkinter import *  
 from tkinter import filedialog
 from tkinter import messagebox
+from threading import Thread
 
 PresentMonDataDir='PresentMon'
 XAxisNum = 100
@@ -134,7 +135,7 @@ def parse_config_file(file_path) :
             str3=''
             for val in para_list :
                 if 'Capacity' in val :
-                    str1 = str( round(float(val.split('=')[1])/(1024*1024*1024),2)) + 'GB'
+                    str1 = str( round(float(val.split('=')[1])/(1024*1024*1024))) + 'GB'
                 if 'ConfiguredClockSpeed' in val:
                     str2 = val.split('=')[1]
                 if 'Manufacturer' in val:
@@ -159,6 +160,7 @@ def parse_config_file(file_path) :
     total_doc_content.test_platform_list.append(platform_info_list)
 
 def get_platforms_list():
+
     lnk_files_list = sorted([ name for name in os.listdir(root_path) if name.endswith('.lnk')])  
     
     global test_case_list 
@@ -187,7 +189,8 @@ def extract_case_information(selection):
     test_case_title= ''
     
     dir_list=[test_folder_list[i] for i in selection] 
-     
+    
+    textvr_global.set('Extract test cases information')
     for dir in dir_list :
         
         dir_path = os.path.join(root_path,dir,PresentMonDataDir) 
@@ -231,6 +234,9 @@ def extract_case_information(selection):
 
 
 def parse_presentdata_files(files,title):
+
+    
+    textvr_global.set('Parsing '+title)
     file_list_len=len(files)
     
     testcase = TestCase(title)
@@ -344,7 +350,9 @@ def save_test_summary_bar(doc) :
 
 #  save each case informaiton to doc 
 def save_each_case_detail_analysis_report(doc) :
-    for i,testcase in enumerate(total_doc_content.test_case_list) :        
+    for i,testcase in enumerate(total_doc_content.test_case_list) :     
+
+        textvr_global.set('Store all rounds informations of '+testcase.name)   
         doc.add_heading(testcase.name,level=3)
         doc.add_heading('Data statistic',level=4)
         doc.add_paragraph('In this case, we have run %d times and conclude this data as below.'%testcase.round_number)
@@ -365,6 +373,7 @@ def save_each_case_detail_analysis_report(doc) :
         doc.add_picture(testcase.rounds_diagram_path,width=Cm(15))
         os.remove(testcase.rounds_diagram_path)
         
+        textvr_global.set('Store median round informations of '+testcase.name)  
         #add each case median round frametime sensitivity analysis
         doc.add_heading('Median Round Frametime Sensitivity Analysis',level=4)
         median_frametime_table = doc.add_table(rows=14, cols=2,style = "Light Grid Accent 6")
@@ -393,7 +402,7 @@ def save_each_case_detail_analysis_report(doc) :
         Dropped_list = df.Dropped.to_list() 
 
         median_frametime_table.columns[1].cells[0].text = str(len(frametime_list))
-        median_frametime_table.columns[1].cells[1].text = str(int(TimeInSeconds_list[-1])+1) +' seconds'
+        median_frametime_table.columns[1].cells[1].text = str(round(TimeInSeconds_list[-1])) +' seconds'
         median_frametime_table.columns[1].cells[2].text = str(round(100*np.array(gpuduration_list).mean()/np.array(frametime_list).mean(),2))+'%'
         median_frametime_table.columns[1].cells[3].text =str(round(np.array(frametime_list).mean(),2))+' ms'
         median_frametime_table.columns[1].cells[4].text =str(round(1000/np.array(frametime_list).mean(),2))
@@ -419,9 +428,10 @@ def save_each_case_detail_analysis_report(doc) :
         median_frametime_table.columns[1].cells[12].text =str(round(np.array(frametime_list).min(),2))+' ms'
         median_frametime_table.columns[1].cells[13].text =str(round(np.array(frametime_list).max(),2))+' ms'
 
+        textvr_global.set('Store median round frametime diagram of '+testcase.name)  
         plt.figure(dpi=100,figsize=(24,8)) 
-        plt.plot(TimeInSeconds_list[0:-1:50],frametime_list[0:-1:50],linewidth=0.5,label = 'CPU Frametime' )
-        plt.plot(TimeInSeconds_list[0:-1:50],gpuduration_list[0:-1:50],linewidth=0.5,label = 'GPU Frametime' )
+        plt.plot(TimeInSeconds_list[0:-1:50],frametime_list[0:-1:50],label = 'CPU Frametime' )
+        plt.plot(TimeInSeconds_list[0:-1:50],gpuduration_list[0:-1:50],label = 'GPU Frametime' )
         plt.xlabel('Time In Seconds')
         plt.ylabel('Milliseconds')
         plt.legend()
@@ -430,6 +440,7 @@ def save_each_case_detail_analysis_report(doc) :
         os.remove('median_frametime_compare.png')
         plt.close()
 #gpu bound
+        textvr_global.set('Store median round GPU bound diagram of '+testcase.name)  
         plt.figure(dpi=100,figsize=(16,2)) 
         plt.bar(TimeInSeconds_list,bound_list,width=0.1,label = 'GPU Bound' ) 
         plt.xlabel('Time In Seconds')
@@ -440,6 +451,7 @@ def save_each_case_detail_analysis_report(doc) :
         os.remove('temp_gpu_bound.png')
         plt.close()
 # gpu utilization
+        textvr_global.set('Store median round GPU utilization diagram of '+testcase.name)  
         plt.figure(dpi=100,figsize=(16,2)) 
         plt.bar(TimeInSeconds_list,bound_percent_list,width=0.1,label = 'GPU Utilization %' ) 
         plt.xlabel('Time In Seconds')
@@ -449,9 +461,46 @@ def save_each_case_detail_analysis_report(doc) :
         doc.add_picture('temp_gpu_utilizaiton.png' ,width=Cm(15))
         os.remove('temp_gpu_utilizaiton.png')
         plt.close()
+# CPU Time / GPU Time Correlation Coefficient
+        textvr_global.set('Store median round CPU Time/GPU Time Correlation Coefficient of '+testcase.name)  
+        plt.figure(dpi=100,figsize=(16,8)) 
+        
+        cpu_smart_target = get_smart_target(frametime_list)
+        gpu_smart_target = get_smart_target(gpuduration_list)
+        max_cpu_frametime = max(frametime_list)
+        max_gpu_frametime = max(gpuduration_list)
+ 
+        
+        plt.plot(np.linspace(0,max_gpu_frametime,2),np.repeat(cpu_smart_target,2),color='red',label='Samrt Target')
+        plt.plot(np.repeat(gpu_smart_target,2),np.linspace(0,max_cpu_frametime,2),color='red') 
 
+        plt.fill_between(np.linspace(0,gpu_smart_target,2),0,np.repeat(cpu_smart_target,2),color='green',label='Good Perf.')
+        plt.fill_between(np.linspace(0,gpu_smart_target,2),cpu_smart_target,np.repeat(max_cpu_frametime,2),color='yellow',label='Low CPU Perf.')
+        plt.fill_between(np.linspace(gpu_smart_target,max_gpu_frametime,2),0,np.repeat(cpu_smart_target,2),color='orange',label='ow GPU Perf.')
+        plt.fill_between(np.linspace(gpu_smart_target,max_gpu_frametime,2),cpu_smart_target,np.repeat(max_cpu_frametime,2),color='pink',label='Low Perf.')
 
+        plt.scatter(gpuduration_list ,frametime_list ,s=10,color='blue',label='Frame' ) 
+
+        plt.xlabel('GPU Time (ms)')
+        plt.ylabel('CPU Time (ms)')
+        plt.legend()
+        plt.savefig('gpu_cpu_co.png')
+        doc.add_picture('gpu_cpu_co.png' ,width=Cm(15))
+        os.remove('gpu_cpu_co.png')
+        plt.close() 
 # summary test platforms infromation
+def get_smart_target(frametime_list):
+    average_fps = 1000/np.array(frametime_list).mean()
+    smart_fps = 1000
+    while 1:
+        if smart_fps< average_fps :
+            break
+        else:
+            if smart_fps < 60 :
+                break
+            smart_fps = smart_fps -30
+    return 1000/smart_fps
+        
 def save_platforms_information(doc):
 
 #add platform table.
@@ -497,7 +546,7 @@ def save_all_cases_frametime_diagram(doc):
         df = pd.read_csv(testcase.median_round_presentmon_data_path)
         x = df.TimeInSeconds.to_list()
         y = df.MsBetweenPresents.to_list()
-        plt.plot(x,y,linewidth=0.2,label = testcase.name )
+        plt.plot(x[0:-1:50],y[0:-1:50],label = testcase.name )#linewidth=0.2,
     plt.xlabel('Time In Seconds')
     plt.ylabel('Milliseconds')
     plt.legend()
@@ -510,7 +559,7 @@ def save_all_cases_frametime_diagram(doc):
 # generate word file
 def save_word_file():
     doc = docx.Document()
-
+    textvr_global.set('Store heading line ')
 #set heading 1 style
     heading_1_style =  doc.styles['Heading 1']
     heading_1_style.font.color.rgb = RGBColor(0, 0, 0)
@@ -533,26 +582,30 @@ def save_word_file():
 
     doc.add_heading(total_doc_content.test_information,level = 2)
 
-
     doc.add_heading('Test Date', level=3)
     doc.add_paragraph('This case was test on '+total_doc_content.test_date)
     
 
     #doc.add_heading('SYSTEM CONFIGURATIONS', level=3)
+    textvr_global.set('Store system configurations ')
     add_heading3(doc,'SYSTEM CONFIGURATIONS' )
     save_platforms_information(doc)
 
 # set test setting screenshot
     #doc.add_heading('GAME SETTING', level=3)
+    textvr_global.set('Store game setting')
     doc.add_paragraph(" ")
     add_heading3(doc, 'GAME SETTING')
     save_test_config_table(doc)
 
 # set test scene screenshot
+
+    textvr_global.set('Store game screenshot')
     doc.add_heading('GAME SCENE SCREENSHOT', level=3)
     for test_scene_path in total_doc_content.test_scene_path_list:
         doc.add_picture(test_scene_path, width=Cm(15))
 # set test summary    
+    textvr_global.set('Store test summary')
     add_heading3(doc, 'TESTING RESULTS')
     doc.add_paragraph('SUMMARY') 
     #collect all data needed to plot bar 
@@ -562,14 +615,22 @@ def save_word_file():
 # visualize presentmon data
     doc.add_heading('Detail performance data based on PresentMon',level = 2)
     save_each_case_detail_analysis_report(doc)
+# Emon data analysis
+    doc.add_heading('Emon data analysis',level = 2)
+    doc.add_paragraph('N/A')
+# GPA analysis
+    doc.add_heading('GPA analysis',level = 2)
+    doc.add_paragraph('N/A')
+# ETL analysis
+    doc.add_heading('ETL analysis',level = 2)
+    doc.add_paragraph('N/A')
 
     filename = total_doc_content.title+'.docx'
     if(os.path.exists(filename)) :
         os.remove(filename)
     doc.save(filename)
 
-def button_choose_dir_fun():
-    
+def button_choose_dir_fun():    
     
     listbox_global.delete(0, END)
     global root_path
@@ -583,20 +644,29 @@ def button_choose_dir_fun():
                 listbox_global.insert(END, item)
         else:
             messagebox.showinfo("Warning", "Please choose right folder")
-def button_generate_report_fun():
+def thread_fun():
 
-    selection = listbox_global.curselection() 
-        
-    extract_case_information(selection)
-
+    selection = listbox_global.curselection()         
+    extract_case_information(selection)    
     save_word_file() 
-    
     listbox_global.delete(0, END)
-    
+    textvr_global.set('Finish!')
     # empty all content.
     total_doc_content.clear()
+    
+    button_choose_dir.config(state='normal')
+    button_process.config(state='normal')
 
-    messagebox.showinfo("Notice", "Report was generated")
+def button_generate_report_fun():
+ 
+    button_choose_dir.config(state='disable')
+    button_process.config(state='disable')
+    t1= Thread(target=thread_fun )        
+    t1.start()
+    
+    
+
+    # messagebox.showinfo("Notice", "Report was generated")
 def create_window():
 
     root = Tk()
@@ -604,7 +674,8 @@ def create_window():
     root.resizable(1,1)
     root.title("ReportGenerator")
     root.geometry('800x350+700+200')
-    frame1 =Frame(root) 
+    frame1 =Frame(root)
+    global button_choose_dir
     button_choose_dir = Button(frame1, text="Choose Directory", command=button_choose_dir_fun) 
     button_choose_dir.grid() 
 
@@ -617,13 +688,19 @@ def create_window():
     listbox_test_case.pack(fill=X,padx=5)#grid(column=1, row=2)
     scrollbar_h.config(command=listbox_test_case.xview)
     scrollbar_h.pack(fill=X)
-
+    global button_process
     button_process=Button(frame1,text='Generate Report',command=button_generate_report_fun)
     button_process.grid(column=1,row=0,padx=20)
     button_exit=Button(frame1,text='Exit',command=sys.exit)    
     button_exit.grid(column=2,row=0,padx=10)
 
     frame1.pack(pady=20)  
+
+
+    global textvr_global   
+    textvr_global= StringVar()
+    label_status = Label(root,textvariable= textvr_global)
+    label_status.pack()
 
     global listbox_global
     listbox_global = listbox_test_case
