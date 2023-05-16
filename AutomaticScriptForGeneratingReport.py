@@ -1,6 +1,9 @@
 import pandas as pd
 import os
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt 
+ 
 import sys
 import numpy as np
 import docx 
