@@ -467,6 +467,7 @@ def save_each_case_detail_analysis_report(doc) :
         
         cpu_smart_target = get_smart_target(frametime_list)
         gpu_smart_target = get_smart_target(gpuduration_list)
+ 
         max_cpu_frametime = max(frametime_list)
         max_gpu_frametime = max(gpuduration_list)
  
@@ -476,7 +477,7 @@ def save_each_case_detail_analysis_report(doc) :
 
         plt.fill_between(np.linspace(0,gpu_smart_target,2),0,np.repeat(cpu_smart_target,2),color='green',label='Good Perf.')
         plt.fill_between(np.linspace(0,gpu_smart_target,2),cpu_smart_target,np.repeat(max_cpu_frametime,2),color='yellow',label='Low CPU Perf.')
-        plt.fill_between(np.linspace(gpu_smart_target,max_gpu_frametime,2),0,np.repeat(cpu_smart_target,2),color='orange',label='ow GPU Perf.')
+        plt.fill_between(np.linspace(gpu_smart_target,max_gpu_frametime,2),0,np.repeat(cpu_smart_target,2),color='orange',label='Low GPU Perf.')
         plt.fill_between(np.linspace(gpu_smart_target,max_gpu_frametime,2),cpu_smart_target,np.repeat(max_cpu_frametime,2),color='pink',label='Low Perf.')
 
         plt.scatter(gpuduration_list ,frametime_list ,s=10,color='blue',label='Frame' ) 
@@ -490,15 +491,15 @@ def save_each_case_detail_analysis_report(doc) :
         plt.close() 
 # summary test platforms infromation
 def get_smart_target(frametime_list):
-    average_fps = 1000/np.array(frametime_list).mean()
-    smart_fps = 1000
+    average_frametime = np.array(frametime_list).mean() 
+    smart_fps = 990
     while 1:
-        if smart_fps< average_fps :
+        if 1000/smart_fps >= average_frametime :
             break
         else:
             if smart_fps < 60 :
                 break
-            smart_fps = smart_fps -30
+            smart_fps = smart_fps -30 
     return 1000/smart_fps
         
 def save_platforms_information(doc):
