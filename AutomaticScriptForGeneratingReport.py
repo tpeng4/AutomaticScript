@@ -314,7 +314,20 @@ def add_heading3(doc, text) :
     #cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)  
     doc.add_paragraph(" ")
 #
+def get_platform_name(testcase):
+    keyword_list = ['XeSS','DLSS','8+0','8+8','8+16']
+    trim_keyword_list = ['Nvidia_','RX_','AMD_','_C1_rev_8','_IBC']
 
+    for kwd in trim_keyword_list :
+        testcase=testcase.replace(kwd,'')
+    
+    temp = testcase.split(' ')
+    name = temp[1]+ ' '+temp[2]
+
+    for kwd in keyword_list:
+        if kwd in testcase:
+            name = name+' '+kwd  
+    return name
 def save_test_summary_bar(doc) :
     testcase_bar_data_list = []    
     bar_percenttile=[1,90]
@@ -329,7 +342,7 @@ def save_test_summary_bar(doc) :
         data = np.array(fps_list)
         result = np.percentile(data,bar_percenttile)
         bar_average_fps.append(round(1000/np.array(frametime_list).mean(),2))
-        bar_x_labels.append('Platform%d'%(i+1))#testcase.name)
+        bar_x_labels.append(get_platform_name(testcase.name))#'Platform%d'%(i+1))#testcase.name)
         testcase_bar_data_list.append(result)
     # begin to draw bar chart 
     bar_total_width = 1
@@ -650,7 +663,9 @@ def button_choose_dir_fun():
             messagebox.showinfo("Warning", "Please choose right folder")
 def thread_fun():
 
-    selection = listbox_global.curselection()         
+    selection = listbox_global.curselection() 
+    if len(selection) ==0 :
+        selection =[i for i in range(0,listbox_global.size())]  
     extract_case_information(selection)    
     save_word_file() 
     listbox_global.delete(0, END)
