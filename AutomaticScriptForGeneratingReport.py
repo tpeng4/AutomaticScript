@@ -253,15 +253,15 @@ def parse_presentdata_files(files,title):
         for index, file in enumerate( files ): 
          
             df=pd.read_csv(file)
-            stride = int( len(df.GPUDuration)/XAxisNum)
+            stride = int( len(df.msGPUActive)/XAxisNum)
 
             round_data_tuple  = []
-            round_data_tuple.append("%.2f" %(df.GPUDuration.mean()))
-            round_data_tuple.append("%.2f" %(df.MsBetweenPresents.mean()))
-            round_data_tuple.append("%.2f" %(1000/float(df.MsBetweenPresents.mean())))
+            round_data_tuple.append("%.2f" %(df.msGPUActive.mean()))
+            round_data_tuple.append("%.2f" %(df.msBetweenPresents.mean()))
+            round_data_tuple.append("%.2f" %(1000/float(df.msBetweenPresents.mean())))
             #compute ratio of fps > 30fps
-            count = len([x for x in df.MsBetweenPresents.tolist() if x <= 1000/30])
-            round_data_tuple.append("%.1f%%" % (count/len(df.MsBetweenPresents) * 100))            
+            count = len([x for x in df.msBetweenPresents.tolist() if x <= 1000/30])
+            round_data_tuple.append("%.1f%%" % (count/len(df.msBetweenPresents) * 100))            
             round_data_tuple.append("%.2f" %(df.Dropped.sum()))
             testcase.round_data_tuple_list.append(round_data_tuple)
 
@@ -273,11 +273,11 @@ def parse_presentdata_files(files,title):
             MsBetweenPresentsAverage= []
             for i in range(XAxisNum):
                 x.append(i)
-                GPUDuration.append(df.GPUDuration[i*stride])
-                GPUDurationAverage.append(round(df.GPUDuration.mean(),2))         
+                GPUDuration.append(df.msGPUActive[i*stride])
+                GPUDurationAverage.append(round(df.msGPUActive.mean(),2))         
 
-                MsBetweenPresents.append(df.MsBetweenPresents[i*stride])
-                MsBetweenPresentsAverage.append(round(df.MsBetweenPresents.mean(),2))   
+                MsBetweenPresents.append(df.msBetweenPresents[i*stride])
+                MsBetweenPresentsAverage.append(round(df.msBetweenPresents.mean(),2))   
             ax=plt.subplot(2,int(file_list_len/2)+1,index+1)
             ax.plot(x,GPUDuration,label= "GPUDuration" )
             ax.plot(x,GPUDurationAverage,'b' ,label= "GPUDurationAverage")
@@ -337,7 +337,7 @@ def save_test_summary_bar(doc) :
     for i,testcase in enumerate(total_doc_content.test_case_list) :
         #doc.add_paragraph(testcase.median_round_presentmon_data_path)
         df = pd.read_csv(testcase.median_round_presentmon_data_path)
-        frametime_list = df.MsBetweenPresents.to_list() 
+        frametime_list = df.msBetweenPresents.to_list() 
         fps_list = [1000/i for i in frametime_list] 
         data = np.array(fps_list)
         result = np.percentile(data,bar_percenttile)
@@ -412,8 +412,8 @@ def save_each_case_detail_analysis_report(doc) :
             median_frametime_table.columns[0].cells[i].paragraphs[0].alignment = 2 
 
         df = pd.read_csv(testcase.median_round_presentmon_data_path)
-        frametime_list= df.MsBetweenPresents.to_list()
-        gpuduration_list = df.GPUDuration.to_list()
+        frametime_list= df.msBetweenPresents.to_list()
+        gpuduration_list = df.msGPUActive.to_list()
         TimeInSeconds_list = df.TimeInSeconds.to_list()
         Dropped_list = df.Dropped.to_list() 
 
@@ -562,7 +562,7 @@ def save_all_cases_frametime_diagram(doc):
     for i,testcase in enumerate(total_doc_content.test_case_list) :
         df = pd.read_csv(testcase.median_round_presentmon_data_path)
         x = df.TimeInSeconds.to_list()
-        y = df.MsBetweenPresents.to_list()
+        y = df.msBetweenPresents.to_list()
         plt.plot(x[0:-1:50],y[0:-1:50],label = testcase.name )#linewidth=0.2,
     plt.xlabel('Time In Seconds')
     plt.ylabel('Milliseconds')
