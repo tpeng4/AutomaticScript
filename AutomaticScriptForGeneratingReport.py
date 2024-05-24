@@ -347,7 +347,7 @@ def save_test_summary_bar(doc) :
     # begin to draw bar chart 
     bar_total_width = 1
     bar_each_width = bar_total_width/(len(bar_percenttile)+3)
-    plt.figure(dpi=200,figsize=(16,8))
+    plt.figure(dpi=200,figsize=(20,8))
     plt.bar(bar_x,bar_average_fps,width=bar_each_width,label='Average FPS')
     for i  in range(len(bar_x)) :
         plt.text(bar_x[i], bar_average_fps[i]+2,bar_average_fps[i],ha='center',fontsize=14)
@@ -356,9 +356,11 @@ def save_test_summary_bar(doc) :
         plt.bar(bar_x+(i+1)*bar_each_width,percentile_fps_list,width=bar_each_width, label='%d'%bar_percenttile[i]+'% FPS')
         for j in range(len(bar_x)):
             plt.text(bar_x[j]+(i+1)*bar_each_width, percentile_fps_list[j]+2,round(percentile_fps_list[j],2),ha='center',fontsize=14)
-    plt.xticks(bar_x,bar_x_labels,fontsize=14)
+    plt.xticks(bar_x,bar_x_labels,fontsize=14,rotation= 3)
+    
     plt.legend()
     plt.ylabel("FPS",fontsize=20) 
+    #plt.show()
     plt.savefig('bar_temp.png')
     doc.add_picture('bar_temp.png' ,width=Cm(15))
     os.remove('bar_temp.png')
