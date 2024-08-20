@@ -19,7 +19,7 @@ from threading import Thread
 
 PresentMonDataDir='PresentMon'
 XAxisNum = 100
-TestPlatformParameters = ['OS','CPU Type','CPU NumberOfCores','CPU NumberOfLogicalProcessors','Baseboard','SMBIOSBIOSVersion','RAM Capacity','RAM ConfiguredClockSpeed','RAM Manufacturer','GPU','DriverVersion']
+TestPlatformParameters = ['OS','CPU Type','CPU NumberOfCores','CPU NumberOfLogicalProcessors','GPU','DriverVersion','RAM Capacity','RAM ConfiguredClockSpeed','RAM Manufacturer','Baseboard','SMBIOSBIOSVersion']
 TestCaseParameters = ['Average GPU duration','Average Frametime','Aveage FPS','Ratio over 30 FPS','Dropped %']
 test_case_list = []
 test_folder_list = []
@@ -66,7 +66,7 @@ class ReportContent:
 def parse_config_file(file_path) :
     flag = ''
     f= open(file_path,'r',encoding='utf-8' )  
-    keyword_list = ['[OS]','[CPU]','[Baseboard]','[BIOS]','[RAM]','[GPU]']
+    keyword_list = ['[OS]', '[CPU0]', '[GPU0]', '[Memory0]','[Baseboard]','[BIOS]']
     info_list = []    
     temp_list =[]
     flag = False
@@ -101,7 +101,7 @@ def parse_config_file(file_path) :
                     str2 = val.split('=')[1]
             platform_info_list.append(str1+' '+str2) 
         # get CPU info
-        if(index == 1) :
+        if(index == 1)  :
             
             str1= ''
             str2 =''
@@ -113,41 +113,43 @@ def parse_config_file(file_path) :
                     str2 = val.split('=')[1]
                 if 'NumberOfLogicalProcessors' in val:
                     str3 = val.split('=')[1]
-            platform_info_list.append(str1)                
-            platform_info_list.append(str2)                
-            platform_info_list.append(str3) 
+            if str1 != '' :         
+                platform_info_list.append(str1)                
+                platform_info_list.append(str2)                
+                platform_info_list.append(str3) 
         # get baseboard info
-        if(index == 2) :
+        if(index == 4) :
             str1= '' 
             for val in para_list :
                 if 'Product' in val :
                     str1 = val.split('=')[1] 
             platform_info_list.append(str1) 
         # get bios info
-        if(index == 3) :
+        if(index == 5) :
             str1= '' 
             for val in para_list :
                 if 'SMBIOSBIOSVersion' in val :
                     str1 = val.split('=')[1] 
             platform_info_list.append(str1)
         # get ram info
-        if(index == 4) :
+        if(index == 3)  :
             
             str1= ''
             str2 =''
             str3=''
             for val in para_list :
-                if 'Capacity' in val :
+                if 'Capacity=' in val :
                     str1 = str( round(float(val.split('=')[1])/(1024*1024*1024))) + 'GB'
                 if 'ConfiguredClockSpeed' in val:
                     str2 = val.split('=')[1]
                 if 'Manufacturer' in val:
                     str3 = val.split('=')[1]
-            platform_info_list.append(str1)                
-            platform_info_list.append(str2)                
-            platform_info_list.append(str3)
+            if str1 != '' :                       
+                platform_info_list.append(str1)                
+                platform_info_list.append(str2)                
+                platform_info_list.append(str3)
         # get GPU info
-        if(index == 5) :
+        if(index == 2)  :
             
             str1= ''
             str2 =''
@@ -156,8 +158,9 @@ def parse_config_file(file_path) :
                     str1 = val.split('=')[1]
                 if 'DriverVersion' in val:
                     str2 = val.split('=')[1]
-            platform_info_list.append(str1)
-            platform_info_list.append(str2)
+            if str1 != '' : 
+                platform_info_list.append(str1)
+                platform_info_list.append(str2)
             
     # save to doc data structure.
     total_doc_content.test_platform_list.append(platform_info_list)
